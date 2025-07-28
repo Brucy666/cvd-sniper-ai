@@ -7,21 +7,23 @@ import time
 
 class BybitFeed:
     def __init__(self, symbol="BTCUSDT", interval=1):
-        self.symbol = symbol
-        self.interval = interval  # time window to group volume (in seconds)
+        self.symbol = symbol.upper()
+        self.interval = interval  # seconds between emissions
         self.buy_volume = 0.0
         self.sell_volume = 0.0
         self.price = 0.0
+        self.last_emit_time = time.time()
 
     async def connect(self, on_tick):
         url = "wss://stream.bybit.com/v5/public/linear"
 
         async with websockets.connect(url) as ws:
-            await ws.send(json.dumps({
+            subscribe_msg = {
                 "op": "subscribe",
                 "args": [f"publicTrade.{self.symbol}"]
-            }))
-            print("✅ Connected to Bybit feed")
+            }
+            await ws.send(json.dumps(subscribe_msg))
+            print(f"✅ Connected to Bybit feed: {self.symbol}")
 
             async for message in ws:
                 try:
@@ -30,25 +32,27 @@ class BybitFeed:
                     for trade in trades:
                         price = float(trade["p"])
                         volume = float(trade["v"])
-                        side = trade["S"]  # Buy or Sell
+                        side = trade["S"]
 
                         if side == "Buy":
                             self.buy_volume += volume
                         else:
                             self.sell_volume += volume
-                        
+
                         self.price = price
 
-                    # Emit data once per interval
-                    if time.time() % self.interval < 0.1:
+                    # Emit on interval (approx)
+                    now = time.time()
+                    if now - self.last_emit_time >= self.interval:
                         await on_tick({
                             "buy_volume": self.buy_volume,
                             "sell_volume": self.sell_volume,
                             "price": self.price,
-                            "timestamp": time.time()
+                            "timestamp": now
                         })
                         self.buy_volume = 0.0
                         self.sell_volume = 0.0
+                        self.last_emit_time = now
 
                 except Exception as e:
-                    print(f"❌ Feed error: {e}")
+                    print(f"❌ Error in {self.symbol} feed: {e}")
