@@ -1,11 +1,14 @@
 # discord_notifier.py
 
+import os
 import requests
 
+# Use Railway environment variables
 WEBHOOKS = {
-    "BTCUSDT": "https://discord.com/api/webhooks/your-btc-webhook",
-    "ETHUSDT": "https://discord.com/api/webhooks/your-eth-webhook",
-    "SOLUSDT": "https://discord.com/api/webhooks/your-sol-webhook"
+    "BTCUSDT": os.getenv("BTC_WEBHOOK"),
+    # You can add more:
+    # "ETHUSDT": os.getenv("ETH_WEBHOOK"),
+    # "SOLUSDT": os.getenv("SOL_WEBHOOK")
 }
 
 def format_matrix(matrix):
@@ -25,7 +28,6 @@ def send_discord_alert(symbol, result, price, matrix):
     price_line = f"**Price:** `{price}`"
 
     matrix_block = f"🕒 **CVD Divergence:**\n{format_matrix(matrix)}"
-
     reasons = "\n- " + "\n- ".join(result["reasons"]) if result["reasons"] else "None"
 
     msg = f"""{header}
@@ -43,5 +45,7 @@ def send_discord_alert(symbol, result, price, matrix):
         print(f"📡 Discord response {symbol}: {response.status_code}")
         if response.status_code != 204:
             print(f"⚠️ Response content: {response.text}")
+        else:
+            print(f"✅ Alert delivered to #{symbol.lower()} channel")
     except Exception as e:
-        print(f"❌ Error sending alert: {e}")
+        print(f"❌ Error sending alert for {symbol}: {e}")
