@@ -14,8 +14,8 @@ import asyncio
 
 SYMBOL = "BTCUSDT"
 MAX_HISTORY = 30
+ACTIVE_TFS = ["1m", "3m", "5m", "15m", "30m", "1h"]
 
-# Engine instances
 cvd = CVDEngine()
 multi_cvd = MultiTimeframeCVDEngine()
 memory = CVDMemoryStore()
@@ -26,37 +26,30 @@ async def on_tick(data):
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
 
-    # Update price history
+    # Track price
     price_history.append(data["price"])
     if len(price_history) > MAX_HISTORY:
         price_history.pop(0)
 
-    # Timeframe mapping
-    price_data_map = {
-        "1m": price_history,
-        "3m": price_history,
-        "5m": price_history,
-        "15m": price_history,
-        "30m": price_history,
-        "1h": price_history
-    }
-
-    # Detect divergence
+    # Build price map (proxy for all TFs)
+    price_data_map = {tf: price_history for tf in ACTIVE_TFS}
     divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
     print(f"[{SYMBOL}] 📊 CVD Matrix:\n{divergence_matrix}")
 
-    # Run AI insight on 1m
-    cvd_series_1m = multi_cvd.get_cvd_series("1m")[-6:]
-    price_series_1m = price_history[-6:]
-    insight = ai_cvd_reader(price_series_1m, cvd_series_1m)
-    print(f"[{SYMBOL}] 🧠 Insight: {insight['trap_signal']} | Confidence: {insight['confidence_level']}")
+    # Run AI insight on each TF
+    for tf in ACTIVE_TFS:
+        cvd_series = multi_cvd.get_cvd_series(tf)[-6:]
+        price_series = price_history[-6:]
+        insight = ai_cvd_reader(price_series, cvd_series, timeframe=tf)
+        if insight["confidence"] >= 80:
+            print(f"🧠 Insight [{tf}]: {insight['trap_type']} | Confidence: {insight['confidence']}")
 
-    # Score the trap
+    # Score sniper trap from matrix
     vwap_relation = "failing reclaim"
     delta_behavior = "spike_no_follow"
     result = score_cvd_signal_from_matrix(divergence_matrix, vwap_relation, delta_behavior)
 
-    # Fire alert if valid and not duplicate
+    # Trigger sniper alert (with cooldown)
     if result["score"] > 60 and should_alert(SYMBOL, data["price"], divergence_matrix):
         print(f"🚨 SNIPER TRAP [{SYMBOL}] | Score: {result['score']}")
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
@@ -65,7 +58,7 @@ async def on_tick(data):
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
 async def main():
-    print(f"🧠 Backfilling CVD memory for {SYMBOL}")
+    print(f"🧠 Backfilling historical CVD for {SYMBOL}")
     price_mem, cvd_mem = backfill_cvd(SYMBOL)
 
     for tf in cvd_mem:
