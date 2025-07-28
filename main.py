@@ -11,62 +11,76 @@ from cvd_backfill import backfill_cvd
 from trap_cooldown import should_alert
 from ai_cvd_reader import ai_cvd_reader
 from vwap_engine import VWAPEngine
+from htf_vwap_engine import HTFVWAPEngine
 import asyncio
 
 SYMBOL = "BTCUSDT"
 MAX_HISTORY = 30
-ACTIVE_TFS = ["1m", "3m", "5m", "15m", "30m", "1h"]
+ACTIVE_TFS = ["1m", "3m", "5m", "15m", "30m", "1h", "4h"]
 
+# Initialize engines
 cvd = CVDEngine()
 multi_cvd = MultiTimeframeCVDEngine()
 memory = CVDMemoryStore()
 vwap_engine = VWAPEngine()
+htf_vwap = HTFVWAPEngine()
 price_history = []
 
 async def on_tick(data):
-    # --- Update Engines ---
+    # Update engines with live tick data
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
-    vwap = vwap_engine.update(data["price"], data["buy_volume"] + data["sell_volume"])
+    session_vwap = vwap_engine.update(data["price"], data["buy_volume"] + data["sell_volume"])
     vwap_status = vwap_engine.get_relation(data["price"])
+    htf_vwap.update(data["price"], data["buy_volume"] + data["sell_volume"], data["timestamp"])
+    weekly_status = htf_vwap.get_relation("weekly", data["price"])
+    monthly_status = htf_vwap.get_relation("monthly", data["price"])
 
-    # --- Maintain Price History ---
+    # Maintain rolling price history
     price_history.append(data["price"])
     if len(price_history) > MAX_HISTORY:
         price_history.pop(0)
 
-    # --- Build TF Matrix ---
+    # Detect divergence across all TFs
     price_data_map = {tf: price_history for tf in ACTIVE_TFS}
     divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
     print(f"[{SYMBOL}] 📊 CVD Matrix:\n{divergence_matrix}")
-    print(f"[{SYMBOL}] 📍 VWAP: {vwap:.2f} | Status: {vwap_status}")
+    print(f"[{SYMBOL}] 📍 VWAP: {session_vwap:.2f} | Weekly: {weekly_status} | Monthly: {monthly_status}")
 
-    # --- Generate Trap Insights ---
+    # AI trap reader for all TFs
     trap_insights = []
     for tf in ACTIVE_TFS:
         price_series = price_history[-6:]
         cvd_series = multi_cvd.get_cvd_series(tf)[-6:]
-        insight = ai_cvd_reader(price_series, cvd_series, timeframe=tf)
+        insight = ai_cvd_reader(price_series, cvd_series, tf)
         if insight["confidence"] >= 80:
             trap_insights.append({
                 "tf": tf,
                 "trap_type": insight["trap_type"],
                 "confidence": insight["confidence"]
             })
-            print(f"🧠 Insight [{tf}]: {insight['trap_type']} | Confidence: {insight['confidence']}")
+            print(f"🧠 [{tf}] Insight: {insight['trap_type']} | Confidence: {insight['confidence']}")
 
-    # --- Score Trap ---
+    # Score sniper trap
     delta_behavior = "spike_no_follow"
     result = score_cvd_signal_from_matrix(divergence_matrix, vwap_status, delta_behavior)
 
-    # --- Fire Sniper Alert ---
+    # Send alert if valid and not duplicate
     if result["score"] > 60 and should_alert(SYMBOL, data["price"], divergence_matrix):
         print(f"🚨 SNIPER TRAP [{SYMBOL}] | Score: {result['score']}")
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
-        send_discord_alert(SYMBOL, result, data["price"], divergence_matrix, vwap_status, trap_insights)
+        send_discord_alert(
+            SYMBOL,
+            result,
+            data["price"],
+            divergence_matrix,
+            vwap_status,
+            trap_insights
+        )
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
+# Boot and backfill before live stream
 async def main():
     print(f"🧠 Backfilling CVD memory for {SYMBOL}")
     price_mem, cvd_mem = backfill_cvd(SYMBOL)
