@@ -1,15 +1,17 @@
 # cvd_backfill.py
 
 import requests
-import time
 
 BYBIT_REST_URL = "https://api.bybit.com/v5/market/kline"
+
 TIMEFRAMES = {
     "1m": 1,
     "3m": 3,
     "5m": 5,
     "15m": 15,
-    "1h": 60
+    "30m": 30,
+    "1h": 60,
+    "4h": 240  # ✅ NEW
 }
 
 def fetch_kline(symbol, interval, limit=100):
@@ -22,7 +24,6 @@ def fetch_kline(symbol, interval, limit=100):
     response = requests.get(BYBIT_REST_URL, params=params)
     data = response.json()
     if "result" not in data or "list" not in data["result"]:
-        print(f"⚠️ Failed to get data for {symbol} {interval}m: {data}")
         return []
 
     candles = data["result"]["list"]
@@ -54,18 +55,10 @@ def backfill_cvd(symbol):
     tf_cvd_history = {}
 
     for tf, minutes in TIMEFRAMES.items():
-        print(f"📥 Backfilling {symbol} - {tf}")
         candles = fetch_kline(symbol, minutes)
         prices = [c["close"] for c in candles]
         cvd_series = reconstruct_cvd(candles)
-
         tf_price_history[tf] = prices
         tf_cvd_history[tf] = cvd_series
 
     return tf_price_history, tf_cvd_history
-
-# Example usage
-if __name__ == "__main__":
-    prices, cvds = backfill_cvd("BTCUSDT")
-    for tf in TIMEFRAMES:
-        print(f"🧠 {tf} Last Price: {prices[tf][-1]} | Last CVD: {cvds[tf][-1]}")
