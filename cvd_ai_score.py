@@ -1,34 +1,51 @@
 # cvd_ai_score.py
 
-def score_cvd_signal(divergence, vwap_relation, delta_behavior):
+def score_cvd_signal_from_matrix(divergence_matrix, vwap_relation, delta_behavior):
     """
-    Inputs:
-    - divergence: {"divergence": "bullish", "type": "regular"} or None
-    - vwap_relation: "above", "below", "failing reclaim"
-    - delta_behavior: "spike_no_follow", "steady", "collapse"
+    Scores sniper trap based on multi-timeframe CVD divergence + context.
 
-    Returns: dict with confidence score and reason
+    divergence_matrix: {"1m": "bearish", "3m": "bearish", "5m": "none", ...}
+    vwap_relation: "failing reclaim", "above", "below"
+    delta_behavior: "spike_no_follow", "steady", "collapse"
     """
     score = 0
     reasons = []
 
-    if divergence:
-        score += 40
-        reasons.append(f"{divergence['divergence']} divergence")
+    # Timeframe weights
+    tf_weights = {
+        "1m": 30,
+        "3m": 20,
+        "5m": 20,
+        "15m": 10
+    }
 
+    # Apply divergence scores
+    for tf, result in divergence_matrix.items():
+        if result == "bearish":
+            score += tf_weights.get(tf, 0)
+            reasons.append(f"bearish divergence on {tf}")
+        elif result == "bullish":
+            score += tf_weights.get(tf, 0)
+            reasons.append(f"bullish divergence on {tf}")
+
+    # VWAP context
     if vwap_relation == "failing reclaim":
-        score += 30
+        score += 20
         reasons.append("failing VWAP reclaim")
 
+    # Delta behavior
     if delta_behavior == "spike_no_follow":
-        score += 20
-        reasons.append("delta spike without price follow")
+        score += 10
+        reasons.append("delta spike without follow-through")
 
-    if score == 0:
-        return {"score": 0, "setup": "none"}
+    setup_type = "none"
+    if score >= 60:
+        setup_type = "sniper trap"
+    elif score >= 40:
+        setup_type = "weak signal"
 
     return {
         "score": min(score, 100),
-        "setup": "sniper trap" if score >= 60 else "weak signal",
+        "setup": setup_type,
         "reasons": reasons
     }
