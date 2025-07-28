@@ -18,12 +18,23 @@ def format_insights(insights):
         for i in insights
     ])
 
-def send_discord_alert(symbol, result, price, matrix, vwap_status, insights=[], htf_bias=None):
+def format_bias_stack(bias_stack):
+    if not bias_stack:
+        return ""
+    return f"""
+🧠 **Bias Stack:**
+- Low: `{bias_stack['low']['bias']}`
+- Mid: `{bias_stack['mid']['bias']}`
+- High: `{bias_stack['high']['bias']}`
+📊 Alignment: `{bias_stack['alignment']}`
+"""
+
+def send_discord_alert(symbol, result, price, matrix, vwap_status, insights=[], bias_stack=None):
     symbol = symbol.upper()
     url = WEBHOOKS.get(symbol)
 
     if not url:
-        print(f"⚠️ No webhook for {symbol}")
+        print(f"⚠️ No webhook configured for {symbol}")
         return
 
     color = "🔴" if result["score"] >= 80 else "🟡"
@@ -31,14 +42,10 @@ def send_discord_alert(symbol, result, price, matrix, vwap_status, insights=[], 
     score_line = f"**Score:** `{result['score']}`  |  **Setup:** `{result['setup']}`"
     price_line = f"**Price:** `{price}`"
     vwap_line = f"📍 **VWAP Status:** `{vwap_status}`"
-
     matrix_block = f"📊 **CVD Divergence:**\n{format_matrix(matrix)}"
     insight_block = f"🧠 **Trap Insights:**\n{format_insights(insights)}"
+    bias_block = format_bias_stack(bias_stack)
     reasons = "\n- " + "\n- ".join(result["reasons"]) if result["reasons"] else "None"
-
-    bias_block = ""
-    if htf_bias:
-        bias_block = f"\n🧠 **HTF Bias:** `{htf_bias['htf_bias']}` | Structure: `{htf_bias['structure']}` | Trap focus: `{htf_bias['preferred_trap']}`"
 
     msg = f"""{header}
 {score_line}
@@ -55,6 +62,8 @@ def send_discord_alert(symbol, result, price, matrix, vwap_status, insights=[], 
         response = requests.post(url, json={"content": msg.strip()})
         print(f"📡 Discord response {symbol}: {response.status_code}")
         if response.status_code != 204:
-            print(f"⚠️ Discord error: {response.text}")
+            print(f"⚠️ Response content: {response.text}")
+        else:
+            print(f"✅ Alert sent to #{symbol.lower()} channel")
     except Exception as e:
-        print(f"❌ Discord send error: {e}")
+        print(f"❌ Discord send error for {symbol}: {e}")
