@@ -1,22 +1,26 @@
 # discord_notifier.py
 
 import requests
-import os
 
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")  # set this in Railway .env
+WEBHOOK_URL = "https://discord.com/api/webhooks/1399312421130076300/sOdMLGErToxhZOVt_SqTVzvfAVYk5mV9ILCpCr-vMyf97ME4t9ZAxWq5quudkbbiKyGx"
 
 def send_discord_alert(message: str):
-    if not DISCORD_WEBHOOK_URL:
-        print("❌ DISCORD_WEBHOOK_URL not set.")
+    """
+    Sends a message to a Discord webhook.
+    Args:
+        message (str): The content to send.
+    """
+    if not WEBHOOK_URL:
+        print("❌ Webhook URL is missing.")
         return
 
-    payload = {
-        "content": message
-    }
+    payload = {"content": message.strip()}
 
     try:
-        response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
-        if response.status_code != 204:
-            print(f"⚠️ Discord response: {response.status_code} - {response.text}")
+        response = requests.post(WEBHOOK_URL, json=payload)
+        if response.status_code == 204:
+            print("✅ Alert sent to Discord.")
+        else:
+            print(f"⚠️ Discord error: {response.status_code} | {response.text}")
     except Exception as e:
-        print(f"❌ Discord error: {e}")
+        print(f"❌ Discord webhook exception: {e}")
