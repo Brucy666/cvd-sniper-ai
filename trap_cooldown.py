@@ -4,21 +4,27 @@ import time
 
 cooldown_memory = {}
 
-def should_alert(symbol, price, matrix, cooldown_sec=120):
+def should_alert(symbol, price, matrix, cooldown_sec=180):
+    """
+    Prevents repeated sniper alerts for the same trap conditions within cooldown window.
+    """
     now = time.time()
     last = cooldown_memory.get(symbol)
 
     if last:
+        price_diff = abs(price - last["price"])
         same_matrix = matrix == last["matrix"]
-        same_price = abs(price - last["price"]) < 10  # $10 wiggle
-        recent = now - last["timestamp"] < cooldown_sec
+        time_elapsed = now - last["timestamp"]
 
-        if same_matrix and same_price and recent:
+        # Duplicate trap = same matrix + similar price + within X seconds
+        if same_matrix and price_diff < 25 and time_elapsed < cooldown_sec:
+            print(f"⏳ Cooldown active for {symbol} | ΔPrice: {price_diff:.1f} | Time: {time_elapsed:.1f}s")
             return False
 
+    # Update trap memory
     cooldown_memory[symbol] = {
-        "matrix": matrix,
         "price": price,
+        "matrix": matrix,
         "timestamp": now
     }
 
