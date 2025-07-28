@@ -9,9 +9,11 @@ from cvd_memory_store import CVDMemoryStore
 from discord_notifier import send_discord_alert
 import asyncio
 
-# 🔧 Add or remove trading pairs here
 WATCH_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 MAX_HISTORY = 30
+
+# 🔧 Used to prevent multiple test alerts
+test_alert_sent = {}
 
 async def start_sniper(symbol):
     print(f"🚀 Starting sniper loop for {symbol}")
@@ -20,6 +22,7 @@ async def start_sniper(symbol):
     multi_cvd = MultiTimeframeCVDEngine()
     memory = CVDMemoryStore()
     price_history = []
+    test_alert_sent[symbol] = False
 
     async def on_tick(data):
         # Update CVD engines
@@ -31,7 +34,6 @@ async def start_sniper(symbol):
         if len(price_history) > MAX_HISTORY:
             price_history.pop(0)
 
-        # Prepare price and CVD data for all TFs
         price_data_map = {
             "1m": price_history,
             "3m": price_history,
@@ -43,18 +45,22 @@ async def start_sniper(symbol):
         divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
         print(f"[{symbol}] 📊 Matrix: {divergence_matrix}")
 
-        # Context logic (VWAP, delta spike — placeholder for now)
         vwap_relation = "failing reclaim"
         delta_behavior = "spike_no_follow"
 
         result = score_cvd_signal_from_matrix(divergence_matrix, vwap_relation, delta_behavior)
 
-        # 🔧 DEBUG: Force test signal (for Discord webhook validation)
-        # if symbol == "BTCUSDT" and result["score"] < 60:
-        #     result["score"] = 90
-        #     result["setup"] = "sniper trap"
-        #     result["reasons"] = ["TEST SIGNAL", "Manually triggered trap"]
+        # 🧪 Force test alert (BTC only, once)
+        if symbol == "BTCUSDT" and not test_alert_sent[symbol]:
+            result["score"] = 95
+            result["setup"] = "sniper trap (TEST)"
+            result["reasons"] = ["FORCED TEST divergence", "fake VWAP reclaim", "delta spike"]
+            print(f"🚨 [TEST MODE] Sending forced sniper alert for {symbol}")
+            send_discord_alert(symbol, result, data["price"], divergence_matrix)
+            test_alert_sent[symbol] = True
+            return
 
+        # Regular live alert (score must be high)
         if result["score"] > 60:
             print(f"🚨 SNIPER TRAP [{symbol}] | Score: {result['score']}")
             memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
@@ -62,11 +68,9 @@ async def start_sniper(symbol):
         else:
             print(f"[{symbol}] ↪ No trap | Score: {result['score']}")
 
-    # Launch feed
     feed = BybitFeed(symbol=symbol)
     await feed.connect(on_tick)
 
-# Run all symbols concurrently
 async def main():
     await asyncio.gather(*[start_sniper(symbol) for symbol in WATCH_SYMBOLS])
 
