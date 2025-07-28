@@ -13,6 +13,7 @@ from ai_cvd_reader import ai_cvd_reader
 from vwap_engine import VWAPEngine
 from htf_vwap_engine import HTFVWAPEngine
 from bias_engine import detect_multi_level_bias
+from fib_trap_detector import detect_fib_trap
 import asyncio
 
 SYMBOL = "BTCUSDT"
@@ -26,8 +27,11 @@ vwap_engine = VWAPEngine()
 htf_vwap = HTFVWAPEngine()
 price_history = []
 
+# Example hardcoded fib swing range (replace with dynamic detection)
+fib_swing_low = 117200
+fib_swing_high = 117900
+
 async def on_tick(data):
-    # --- Update Core Engines ---
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     session_vwap = vwap_engine.update(data["price"], data["buy_volume"] + data["sell_volume"])
@@ -36,18 +40,15 @@ async def on_tick(data):
     weekly_status = htf_vwap.get_relation("weekly", data["price"])
     monthly_status = htf_vwap.get_relation("monthly", data["price"])
 
-    # --- Maintain Rolling Price History ---
     price_history.append(data["price"])
     if len(price_history) > MAX_HISTORY:
         price_history.pop(0)
 
-    # --- Divergence Matrix ---
     price_data_map = {tf: price_history for tf in ACTIVE_TFS}
     divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
     print(f"[{SYMBOL}] 📊 CVD Matrix:\n{divergence_matrix}")
     print(f"[{SYMBOL}] 📍 VWAP: {session_vwap:.2f} | Weekly: {weekly_status} | Monthly: {monthly_status}")
 
-    # --- Trap Insights from AI CVD Reader ---
     trap_insights = []
     for tf in ACTIVE_TFS:
         cvd_series = multi_cvd.get_cvd_series(tf)[-6:]
@@ -61,7 +62,22 @@ async def on_tick(data):
             })
             print(f"🧠 [{tf}] Trap: {insight['trap_type']} | Confidence: {insight['confidence']}")
 
-    # --- HTF Bias Stack Detection ---
+    # Fib trap detection from 15m structure, evaluated at 3m CVD
+    fib_result = detect_fib_trap(
+        swing_low=fib_swing_low,
+        swing_high=fib_swing_high,
+        current_price=data["price"],
+        cvd_series_3m=multi_cvd.get_cvd_series("3m")[-6:],
+        vwap_relation=vwap_status
+    )
+    if fib_result["triggered"]:
+        trap_insights.append({
+            "tf": "3m",
+            "trap_type": "1.41 fib extension trap",
+            "confidence": fib_result["confidence"]
+        })
+        print(f"📐 Fib trap triggered: {fib_result['reason']}")
+
     bias_stack = detect_multi_level_bias(
         price_data_map=price_data_map,
         cvd_engine=multi_cvd,
@@ -69,11 +85,9 @@ async def on_tick(data):
     )
     print(f"🧠 Bias Stack → Low: {bias_stack['low']['bias']} | Mid: {bias_stack['mid']['bias']} | High: {bias_stack['high']['bias']} | Alignment: {bias_stack['alignment']}")
 
-    # --- Score Sniper Trap ---
     delta_behavior = "spike_no_follow"
     result = score_cvd_signal_from_matrix(divergence_matrix, vwap_status, delta_behavior)
 
-    # --- Fire Alert if Valid ---
     if result["score"] > 60 and should_alert(SYMBOL, data["price"], divergence_matrix):
         print(f"🚨 SNIPER TRAP [{SYMBOL}] | Score: {result['score']}")
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
@@ -89,7 +103,6 @@ async def on_tick(data):
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
-# --- Boot + Backfill ---
 async def main():
     print(f"🧠 Backfilling CVD memory for {SYMBOL}")
     price_mem, cvd_mem = backfill_cvd(SYMBOL)
