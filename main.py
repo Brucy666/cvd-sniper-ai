@@ -10,6 +10,7 @@ from discord_notifier import send_discord_alert
 from cvd_backfill import backfill_cvd
 from trap_cooldown import should_alert
 from ai_cvd_reader import ai_cvd_reader
+from vwap_engine import VWAPEngine
 import asyncio
 
 SYMBOL = "BTCUSDT"
@@ -19,37 +20,40 @@ ACTIVE_TFS = ["1m", "3m", "5m", "15m", "30m", "1h"]
 cvd = CVDEngine()
 multi_cvd = MultiTimeframeCVDEngine()
 memory = CVDMemoryStore()
+vwap_engine = VWAPEngine()
 price_history = []
 
 async def on_tick(data):
-    # Update engines
+    # Update core engines
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
+    vwap = vwap_engine.update(data["price"], data["buy_volume"] + data["sell_volume"])
+    vwap_status = vwap_engine.get_relation(data["price"])
 
-    # Track price
+    # Maintain price history
     price_history.append(data["price"])
     if len(price_history) > MAX_HISTORY:
         price_history.pop(0)
 
-    # Build price map (proxy for all TFs)
+    # Timeframe-based data map
     price_data_map = {tf: price_history for tf in ACTIVE_TFS}
     divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
     print(f"[{SYMBOL}] 📊 CVD Matrix:\n{divergence_matrix}")
+    print(f"[{SYMBOL}] 📍 VWAP: {vwap:.2f} | Status: {vwap_status}")
 
-    # Run AI insight on each TF
+    # AI CVD reader on key timeframes
     for tf in ACTIVE_TFS:
-        cvd_series = multi_cvd.get_cvd_series(tf)[-6:]
         price_series = price_history[-6:]
+        cvd_series = multi_cvd.get_cvd_series(tf)[-6:]
         insight = ai_cvd_reader(price_series, cvd_series, timeframe=tf)
         if insight["confidence"] >= 80:
             print(f"🧠 Insight [{tf}]: {insight['trap_type']} | Confidence: {insight['confidence']}")
 
-    # Score sniper trap from matrix
-    vwap_relation = "failing reclaim"
+    # Scoring with VWAP logic included
     delta_behavior = "spike_no_follow"
-    result = score_cvd_signal_from_matrix(divergence_matrix, vwap_relation, delta_behavior)
+    result = score_cvd_signal_from_matrix(divergence_matrix, vwap_status, delta_behavior)
 
-    # Trigger sniper alert (with cooldown)
+    # Trigger sniper trap alert
     if result["score"] > 60 and should_alert(SYMBOL, data["price"], divergence_matrix):
         print(f"🚨 SNIPER TRAP [{SYMBOL}] | Score: {result['score']}")
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
@@ -58,7 +62,7 @@ async def on_tick(data):
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
 async def main():
-    print(f"🧠 Backfilling historical CVD for {SYMBOL}")
+    print(f"🧠 Backfilling CVD memory for {SYMBOL}")
     price_mem, cvd_mem = backfill_cvd(SYMBOL)
 
     for tf in cvd_mem:
