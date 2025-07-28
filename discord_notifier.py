@@ -2,40 +2,46 @@
 
 import requests
 
-# Channel-specific webhooks
 WEBHOOKS = {
-    "BTCUSDT": "https://discord.com/api/webhooks/1399375599847477278/GvpDMz7vsNEVHaipwjrISy_w21X5EOCrQVikQo7E59UkJkWZPy3yhAptruf95U1xRl2O",
-    "ETHUSDT": "https://discord.com/api/webhooks/1399376610259501167/KB5Mk2W9NQM5YrqhYKRogL8bSk8DufnHz3zaHdw-B1cL-xNTGXBE9DML4arfGAYVIk5-",
-    "SOLUSDT": "https://discord.com/api/webhooks/1399376272622223521/-WBsGnn-4VeIv-OWC6bb1sYHEDLzY0fwJJ7Wfbqyk-PDISSV0zZddN2ijybst716TyOU"
+    "BTCUSDT": "https://discord.com/api/webhooks/your-btc-webhook",
+    "ETHUSDT": "https://discord.com/api/webhooks/your-eth-webhook",
+    "SOLUSDT": "https://discord.com/api/webhooks/your-sol-webhook"
 }
 
+def format_matrix(matrix):
+    return "\n".join([f"- {tf}: {val}" for tf, val in matrix.items()])
+
 def send_discord_alert(symbol, result, price, matrix):
+    symbol = symbol.upper()
     url = WEBHOOKS.get(symbol)
+
     if not url:
-        print(f"⚠️ No webhook found for symbol {symbol}")
+        print(f"⚠️ No webhook configured for {symbol}")
         return
 
-    color = "🔴" if result["score"] >= 70 else "🟡"
+    color = "🔴" if result["score"] >= 80 else "🟡"
     header = f"{color} **{symbol} SNIPER ALERT**"
     score_line = f"**Score:** `{result['score']}`  |  **Setup:** `{result['setup']}`"
     price_line = f"**Price:** `{price}`"
-    matrix_line = f"**CVD Divergence Matrix:** `{matrix}`"
+
+    matrix_block = f"🕒 **CVD Divergence:**\n{format_matrix(matrix)}"
+
     reasons = "\n- " + "\n- ".join(result["reasons"]) if result["reasons"] else "None"
 
     msg = f"""{header}
 {score_line}
 {price_line}
-{matrix_line}
+{matrix_block}
 **Reasons:**{reasons}
 """
 
     payload = {"content": msg.strip()}
 
     try:
+        print(f"📤 Sending alert for {symbol}...")
         response = requests.post(url, json=payload)
-        if response.status_code == 204:
-            print(f"✅ Alert sent to #{symbol.lower()} channel")
-        else:
-            print(f"⚠️ Discord error [{symbol}]: {response.status_code} - {response.text}")
+        print(f"📡 Discord response {symbol}: {response.status_code}")
+        if response.status_code != 204:
+            print(f"⚠️ Response content: {response.text}")
     except Exception as e:
-        print(f"❌ Webhook failure [{symbol}]: {e}")
+        print(f"❌ Error sending alert: {e}")
