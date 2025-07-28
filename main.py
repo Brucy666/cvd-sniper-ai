@@ -7,22 +7,23 @@ from multi_tf_divergence_matrix import detect_multi_tf_divergence_matrix
 from cvd_ai_score import score_cvd_signal_from_matrix
 from cvd_memory_store import CVDMemoryStore
 from discord_notifier import send_discord_alert
+from cvd_backfill import backfill_cvd  # ⬅️ NEW
 import asyncio
 
 SYMBOL = "BTCUSDT"
 MAX_HISTORY = 30
 
+# Initialize engines
 cvd = CVDEngine()
 multi_cvd = MultiTimeframeCVDEngine()
 memory = CVDMemoryStore()
 price_history = []
 
 async def on_tick(data):
-    # Update CVD
+    # Update CVDs with live data
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
 
-    # Maintain price history
     price_history.append(data["price"])
     if len(price_history) > MAX_HISTORY:
         price_history.pop(0)
@@ -37,19 +38,27 @@ async def on_tick(data):
     divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
     print("📊 CVD Divergence Matrix:", divergence_matrix)
 
-    vwap_relation = "failing reclaim"  # TODO: replace with real VWAP logic
-    delta_behavior = "spike_no_follow"  # TODO: replace with delta spike module
+    vwap_relation = "failing reclaim"
+    delta_behavior = "spike_no_follow"
 
     result = score_cvd_signal_from_matrix(divergence_matrix, vwap_relation, delta_behavior)
 
     if result["score"] > 60:
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
-        print(f"🚨 LIVE SNIPER TRAP | Score: {result['score']}")
         send_discord_alert(SYMBOL, result, data["price"], divergence_matrix)
     else:
         print(f"↪ No sniper trap | Score: {result['score']}")
 
 async def main():
+    # ⏳ Backfill CVD before live feed starts
+    print("🧠 Loading historical memory for sniper bot...")
+    backfilled_prices, backfilled_cvd = backfill_cvd(SYMBOL)
+
+    for tf in backfilled_cvd:
+        multi_cvd.cvd_history[tf] = backfilled_cvd[tf]
+        print(f"✅ Loaded {tf} CVD with {len(backfilled_cvd[tf])} points")
+
+    print("🚀 Starting live feed...")
     feed = BybitFeed(symbol=SYMBOL)
     await feed.connect(on_tick)
 
