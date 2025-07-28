@@ -10,7 +10,7 @@ from discord_notifier import send_discord_alert
 import asyncio
 
 MAX_HISTORY = 30
-WATCH_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]  # You can expand this list
+WATCH_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
 async def start_sniper(symbol):
     print(f"🚀 Starting sniper engine for {symbol}")
@@ -21,9 +21,11 @@ async def start_sniper(symbol):
     price_history = []
 
     async def on_tick(data):
+        # Update CVD engines
         cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
         multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
 
+        # Maintain price history
         price_history.append(data["price"])
         if len(price_history) > MAX_HISTORY:
             price_history.pop(0)
@@ -32,30 +34,20 @@ async def start_sniper(symbol):
             "1m": price_history,
             "3m": price_history,
             "5m": price_history,
-            "15m": price_history,
+            "15m": price_history
         }
 
         divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
         print(f"[{symbol}] 📊 Matrix:", divergence_matrix)
 
-        vwap_relation = "failing reclaim"
-        delta_behavior = "spike_no_follow"
+        vwap_relation = "failing reclaim"       # Placeholder
+        delta_behavior = "spike_no_follow"      # Placeholder
 
         result = score_cvd_signal_from_matrix(divergence_matrix, vwap_relation, delta_behavior)
 
         if result["score"] > 60:
             memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
-            msg = f"""
-🎯 **SNIPER TRAP: {symbol}**
-**Score:** {result['score']}
-**Setup:** {result['setup']}
-**Price:** {data['price']}
-**CVD Divergence:** {divergence_matrix}
-**Reasons:**
-- {'\n- '.join(result['reasons'])}
-"""
-            print(msg)
-            send_discord_alert(msg)
+            send_discord_alert(symbol, result, data["price"], divergence_matrix)
         else:
             print(f"[{symbol}] ↪ No sniper | Score: {result['score']}")
 
