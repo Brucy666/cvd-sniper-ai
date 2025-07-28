@@ -24,40 +24,46 @@ vwap_engine = VWAPEngine()
 price_history = []
 
 async def on_tick(data):
-    # Update core engines
+    # --- Update Engines ---
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     vwap = vwap_engine.update(data["price"], data["buy_volume"] + data["sell_volume"])
     vwap_status = vwap_engine.get_relation(data["price"])
 
-    # Maintain price history
+    # --- Maintain Price History ---
     price_history.append(data["price"])
     if len(price_history) > MAX_HISTORY:
         price_history.pop(0)
 
-    # Timeframe-based data map
+    # --- Build TF Matrix ---
     price_data_map = {tf: price_history for tf in ACTIVE_TFS}
     divergence_matrix = detect_multi_tf_divergence_matrix(price_data_map, multi_cvd, lookback=5)
     print(f"[{SYMBOL}] 📊 CVD Matrix:\n{divergence_matrix}")
     print(f"[{SYMBOL}] 📍 VWAP: {vwap:.2f} | Status: {vwap_status}")
 
-    # AI CVD reader on key timeframes
+    # --- Generate Trap Insights ---
+    trap_insights = []
     for tf in ACTIVE_TFS:
         price_series = price_history[-6:]
         cvd_series = multi_cvd.get_cvd_series(tf)[-6:]
         insight = ai_cvd_reader(price_series, cvd_series, timeframe=tf)
         if insight["confidence"] >= 80:
+            trap_insights.append({
+                "tf": tf,
+                "trap_type": insight["trap_type"],
+                "confidence": insight["confidence"]
+            })
             print(f"🧠 Insight [{tf}]: {insight['trap_type']} | Confidence: {insight['confidence']}")
 
-    # Scoring with VWAP logic included
+    # --- Score Trap ---
     delta_behavior = "spike_no_follow"
     result = score_cvd_signal_from_matrix(divergence_matrix, vwap_status, delta_behavior)
 
-    # Trigger sniper trap alert
+    # --- Fire Sniper Alert ---
     if result["score"] > 60 and should_alert(SYMBOL, data["price"], divergence_matrix):
         print(f"🚨 SNIPER TRAP [{SYMBOL}] | Score: {result['score']}")
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
-        send_discord_alert(SYMBOL, result, data["price"], divergence_matrix)
+        send_discord_alert(SYMBOL, result, data["price"], divergence_matrix, vwap_status, trap_insights)
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
