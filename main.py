@@ -14,6 +14,7 @@ from vwap_engine import VWAPEngine
 from htf_vwap_engine import HTFVWAPEngine
 from bias_engine import detect_multi_level_bias
 from fib_trap_detector import detect_fib_trap
+from trap_journal import log_full_trap
 import asyncio
 
 SYMBOL = "BTCUSDT"
@@ -27,8 +28,7 @@ vwap_engine = VWAPEngine()
 htf_vwap = HTFVWAPEngine()
 price_history = []
 
-# Example hardcoded fib swing range (replace with dynamic detection)
-fib_swing_low = 117200
+fib_swing_low = 117200  # TODO: Replace with dynamic logic
 fib_swing_high = 117900
 
 async def on_tick(data):
@@ -62,7 +62,6 @@ async def on_tick(data):
             })
             print(f"🧠 [{tf}] Trap: {insight['trap_type']} | Confidence: {insight['confidence']}")
 
-    # Fib trap detection from 15m structure, evaluated at 3m CVD
     fib_result = detect_fib_trap(
         swing_low=fib_swing_low,
         swing_high=fib_swing_high,
@@ -91,6 +90,7 @@ async def on_tick(data):
     if result["score"] > 60 and should_alert(SYMBOL, data["price"], divergence_matrix):
         print(f"🚨 SNIPER TRAP [{SYMBOL}] | Score: {result['score']}")
         memory.log_event(data["timestamp"], cvd_value, data["price"], divergence_matrix, result["score"])
+
         send_discord_alert(
             SYMBOL,
             result,
@@ -99,6 +99,19 @@ async def on_tick(data):
             vwap_status,
             trap_insights,
             bias_stack
+        )
+
+        log_full_trap(
+            symbol=SYMBOL,
+            price=data["price"],
+            timestamp=data["timestamp"],
+            divergence_matrix=divergence_matrix,
+            trap_insights=trap_insights,
+            vwap_status=vwap_status,
+            fib_result=fib_result,
+            bias_stack=bias_stack,
+            alert_score=result["score"],
+            alert_reasons=result["reasons"]
         )
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
