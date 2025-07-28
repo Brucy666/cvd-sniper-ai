@@ -7,6 +7,15 @@ WEBHOOKS = {
     "BTCUSDT": os.getenv("BTC_WEBHOOK")
 }
 
+TREND_EMOJIS = {
+    "uptrend": "🔺",
+    "downtrend": "🔻",
+    "range": "🔄",
+    "transition": "⚠️",
+    "compressing": "📉",
+    "unknown": "❓"
+}
+
 def format_matrix(matrix):
     return "\n".join([f"- {tf}: {val}" for tf, val in matrix.items()])
 
@@ -21,11 +30,22 @@ def format_insights(insights):
 def format_bias_stack(bias_stack):
     if not bias_stack:
         return ""
+
+    def format_line(level):
+        bias = bias_stack[level]["bias"]
+        trend = bias_stack[level].get("trend", "unknown")
+        emoji = TREND_EMOJIS.get(trend, "❓")
+        return f"- {level.capitalize()}: `{bias}` (trend: {trend}) {emoji}"
+
+    lines = "\n".join([
+        format_line("low"),
+        format_line("mid"),
+        format_line("high")
+    ])
+    
     return f"""
 🧠 **Bias Stack:**
-- Low: `{bias_stack['low']['bias']}`
-- Mid: `{bias_stack['mid']['bias']}`
-- High: `{bias_stack['high']['bias']}`
+{lines}
 📊 Alignment: `{bias_stack['alignment']}`
 """
 
@@ -64,6 +84,6 @@ def send_discord_alert(symbol, result, price, matrix, vwap_status, insights=[], 
         if response.status_code != 204:
             print(f"⚠️ Response content: {response.text}")
         else:
-            print(f"✅ Alert sent to #{symbol.lower()} channel")
+            print(f"✅ Alert delivered to #{symbol.lower()} channel")
     except Exception as e:
         print(f"❌ Discord send error for {symbol}: {e}")
