@@ -15,6 +15,7 @@ from htf_vwap_engine import HTFVWAPEngine
 from bias_engine import detect_multi_level_bias
 from fib_trap_detector import detect_fib_trap
 from trap_journal import log_full_trap
+from trap_outcome_tracker import update_outcomes
 import asyncio
 
 SYMBOL = "BTCUSDT"
@@ -115,6 +116,11 @@ async def on_tick(data):
         )
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
+
+    # Evaluate trap outcomes
+    update_outcomes(current_price=data["price"], current_time=data["timestamp"])
+    print("🔁 Checked trap outcomes for updates")
+
 
 async def main():
     print(f"🧠 Backfilling CVD memory for {SYMBOL}")
