@@ -5,7 +5,7 @@ import datetime
 import os
 
 SUPABASE_URL = "https://jlnlwohutrnijiuxchna.supabase.co"
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "sb_secret_eFtCTuYaVmjhOC1lrkTRvg_yNiu7bR-"
+SUPABASE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "sb_secret_eFtCTuYaVmjhOC1lrkTRvg_yNiu7bR-").strip()
 SUPABASE_TABLE = "Traps"  # Capital T — MUST match Supabase table exactly
 
 headers = {
@@ -40,7 +40,7 @@ def log_trap_to_supabase(
     }
 
     print("\n📡 Attempting Supabase trap insert...")
-    print("🔑 Key loaded:", bool(SUPABASE_KEY))
+    print("🔑 Key loaded:", repr(SUPABASE_KEY))
     print("🛣 Endpoint:", f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
     print("📦 Payload:", payload)
 
@@ -55,4 +55,4 @@ def log_trap_to_supabase(
         else:
             print(f"❌ Supabase error {res.status_code}: {res.text}")
     except Exception as e:
-        print(f"❌ Exception during Supabase insert: {e}")
+        print(f"❌ Exception during Supabase insert: {e}"
