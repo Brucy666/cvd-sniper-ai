@@ -55,4 +55,4 @@ def log_trap_to_supabase(
         else:
             print(f"❌ Supabase error {res.status_code}: {res.text}")
     except Exception as e:
-        print(f"❌ Exception during Supabase insert: {e}"
+        print(f"❌ Exception during Supabase insert: {e}")
