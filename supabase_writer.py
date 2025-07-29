@@ -6,7 +6,7 @@ import os
 
 SUPABASE_URL = "https://jlnlwohutrnijiuxchna.supabase.co"
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "sb_secret_eFtCTuYaVmjhOC1lrkTRvg_yNiu7bR-"
-SUPABASE_TABLE = "Traps"  # CASE SENSITIVE - must match Supabase exactly
+SUPABASE_TABLE = "Traps"  # Capital T — MUST match Supabase table exactly
 
 headers = {
     "apikey": SUPABASE_KEY,
@@ -40,8 +40,8 @@ def log_trap_to_supabase(
     }
 
     print("\n📡 Attempting Supabase trap insert...")
-    print("🔑 KEY FOUND:", bool(SUPABASE_KEY))
-    print("📤 URL:", f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
+    print("🔑 Key loaded:", bool(SUPABASE_KEY))
+    print("🛣 Endpoint:", f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
     print("📦 Payload:", payload)
 
     try:
