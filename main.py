@@ -1,5 +1,6 @@
 # main.py
 
+import asyncio
 from bybit_feed import BybitFeed
 from cvd_engine import CVDEngine
 from cvd_multi_tf_engine import MultiTimeframeCVDEngine
@@ -17,7 +18,6 @@ from fib_trap_detector import detect_fib_trap
 from trap_journal import log_full_trap
 from trap_outcome_tracker import update_outcomes
 from supabase_writer import log_trap_to_supabase
-import asyncio
 
 SYMBOL = "BTCUSDT"
 MAX_HISTORY = 30
@@ -36,6 +36,7 @@ fib_swing_high = 117900
 async def on_tick(data):
     cvd_value = cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
     multi_cvd.update(data["buy_volume"], data["sell_volume"], data["timestamp"])
+
     session_vwap = vwap_engine.update(data["price"], data["buy_volume"] + data["sell_volume"])
     vwap_status = vwap_engine.get_relation(data["price"])
     htf_vwap.update(data["price"], data["buy_volume"] + data["sell_volume"], data["timestamp"])
@@ -117,20 +118,21 @@ async def on_tick(data):
         )
 
         log_trap_to_supabase(
-            bot_id="fib-sniper",
+            bot_id="cvd-sniper",
             symbol=SYMBOL,
             price=data["price"],
             score=result["score"],
             trap_type=trap_insights[-1]["trap_type"] if trap_insights else "unknown",
             confidence=trap_insights[-1]["confidence"] if trap_insights else 0,
-            bias_alignment=bias_stack["alignment"]
+            bias_alignment=bias_stack["alignment"],
+            outcome_success=None,
+            delta=cvd_value
         )
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
     update_outcomes(current_price=data["price"], current_time=data["timestamp"])
     print("🔁 Checked trap outcomes for updates")
-
 
 async def main():
     print(f"🧠 Backfilling CVD memory for {SYMBOL}")
