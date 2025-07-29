@@ -7,8 +7,12 @@ import os
 SUPABASE_URL = "https://jlnlwohutrnijiuxchna.supabase.co"
 SUPABASE_TABLE = "Traps"
 
-# Grab from Railway environment or fallback
-SUPABASE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "sb_secret_eFtCTuYaVmjhOC1lrkTRvg_yNiu7bR-").strip()
+# Load the service role key from environment variable (recommended)
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+# Final fallback (only for testing)
+if not SUPABASE_KEY:
+    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impsbmx3b2h1dHJuaWppdXhjaG5hIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Mzc2NzIyNiwiZXhwIjoyMDY5MzQzMjI2fQ.8BKE7OucjwTMjfLA0qNyu0mIlW5yIAn7OP2Ibi64FcY"
 
 headers = {
     "apikey": SUPABASE_KEY,
@@ -18,15 +22,15 @@ headers = {
 
 
 def log_trap_to_supabase(
-    bot_id: str,
-    symbol: str,
-    price: float,
-    score: int,
-    trap_type: str,
-    confidence: int,
-    bias_alignment: str,
-    outcome_success: bool = None,
-    delta: float = None
+    bot_id,
+    symbol,
+    price,
+    score,
+    trap_type,
+    confidence,
+    bias_alignment,
+    outcome_success=None,
+    delta=None
 ):
     payload = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
@@ -42,19 +46,19 @@ def log_trap_to_supabase(
     }
 
     print("\n📡 Attempting Supabase trap insert...")
-    print(f"🔑 Key loaded: {'VALID' if SUPABASE_KEY.startswith('sb_') else 'INVALID'}")
-    print(f"🛣 Endpoint: {SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
+    print("🔑 Key loaded:", SUPABASE_KEY[:6] + "..." + SUPABASE_KEY[-6:])
+    print("🛣 Endpoint:", f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
     print("📦 Payload:", payload)
 
     try:
-        response = requests.post(
+        res = requests.post(
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}",
             headers=headers,
             json=payload
         )
-        if response.status_code in [200, 201]:
+        if res.status_code in [200, 201]:
             print(f"✅ Supabase insert successful | {symbol} | {score} pts")
         else:
-            print(f"❌ Supabase error {response.status_code}: {response.text}")
+            print(f"❌ Supabase error {res.status_code}: {res.text}")
     except Exception as e:
         print(f"❌ Exception during Supabase insert: {e}")
