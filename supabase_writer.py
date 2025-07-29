@@ -6,7 +6,7 @@ import os
 
 SUPABASE_URL = "https://jlnlwohutrnijiuxchna.supabase.co"
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "sb_secret_eFtCTuYaVmjhOC1lrkTRvg_yNiu7bR-"
-SUPABASE_TABLE = "Traps"
+SUPABASE_TABLE = "Traps"  # CASE SENSITIVE - must match Supabase exactly
 
 headers = {
     "apikey": SUPABASE_KEY,
@@ -39,6 +39,11 @@ def log_trap_to_supabase(
         "delta": round(delta, 2) if delta is not None else None
     }
 
+    print("\n📡 Attempting Supabase trap insert...")
+    print("🔑 KEY FOUND:", bool(SUPABASE_KEY))
+    print("📤 URL:", f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
+    print("📦 Payload:", payload)
+
     try:
         res = requests.post(
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}",
@@ -46,8 +51,8 @@ def log_trap_to_supabase(
             json=payload
         )
         if res.status_code in [200, 201]:
-            print(f"☁️ Trap uploaded to Supabase | {symbol} | {score} pts")
+            print(f"✅ Supabase insert successful | {symbol} | {score} pts")
         else:
             print(f"❌ Supabase error {res.status_code}: {res.text}")
     except Exception as e:
-        print(f"❌ Failed to upload trap: {e}")
+        print(f"❌ Exception during Supabase insert: {e}")
