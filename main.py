@@ -16,6 +16,7 @@ from bias_engine import detect_multi_level_bias
 from fib_trap_detector import detect_fib_trap
 from trap_journal import log_full_trap
 from trap_outcome_tracker import update_outcomes
+from supabase_writer import log_trap_to_supabase
 import asyncio
 
 SYMBOL = "BTCUSDT"
@@ -29,7 +30,7 @@ vwap_engine = VWAPEngine()
 htf_vwap = HTFVWAPEngine()
 price_history = []
 
-fib_swing_low = 117200  # TODO: Replace with dynamic logic
+fib_swing_low = 117200
 fib_swing_high = 117900
 
 async def on_tick(data):
@@ -114,10 +115,19 @@ async def on_tick(data):
             alert_score=result["score"],
             alert_reasons=result["reasons"]
         )
+
+        log_trap_to_supabase(
+            bot_id="fib-sniper",
+            symbol=SYMBOL,
+            price=data["price"],
+            score=result["score"],
+            trap_type=trap_insights[-1]["trap_type"] if trap_insights else "unknown",
+            confidence=trap_insights[-1]["confidence"] if trap_insights else 0,
+            bias_alignment=bias_stack["alignment"]
+        )
     else:
         print(f"[{SYMBOL}] ↪ No trap | Score: {result['score']}")
 
-    # Evaluate trap outcomes
     update_outcomes(current_price=data["price"], current_time=data["timestamp"])
     print("🔁 Checked trap outcomes for updates")
 
