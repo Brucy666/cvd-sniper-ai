@@ -5,21 +5,13 @@ import datetime
 import os
 
 SUPABASE_URL = "https://jlnlwohutrnijiuxchna.supabase.co"
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "YOUR_SERVICE_ROLE_KEY_HERE"
 SUPABASE_TABLE = "Traps"
 
-# Load the service role key from environment variable (recommended)
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-
-# Final fallback (only for testing)
-if not SUPABASE_KEY:
-    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impsbmx3b2h1dHJuaWppdXhjaG5hIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Mzc2NzIyNiwiZXhwIjoyMDY5MzQzMjI2fQ.8BKE7OucjwTMjfLA0qNyu0mIlW5yIAn7OP2Ibi64FcY"
-
 headers = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "apikey": SUPABASE_KEY,  # ✅ must use apikey, not Authorization
     "Content-Type": "application/json"
 }
-
 
 def log_trap_to_supabase(
     bot_id,
@@ -45,20 +37,18 @@ def log_trap_to_supabase(
         "delta": round(delta, 2) if delta is not None else None
     }
 
-    print("\n📡 Attempting Supabase trap insert...")
-    print("🔑 Key loaded:", SUPABASE_KEY[:6] + "..." + SUPABASE_KEY[-6:])
-    print("🛣 Endpoint:", f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}")
-    print("📦 Payload:", payload)
-
     try:
-        res = requests.post(
+        print("\n📡 Inserting trap into Supabase...")
+        response = requests.post(
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}",
             headers=headers,
             json=payload
         )
-        if res.status_code in [200, 201]:
-            print(f"✅ Supabase insert successful | {symbol} | {score} pts")
+
+        if response.status_code in [200, 201]:
+            print(f"✅ Supabase insert success | {symbol} | Score: {score}")
         else:
-            print(f"❌ Supabase error {res.status_code}: {res.text}")
+            print(f"❌ Supabase insert failed | Code: {response.status_code} | Msg: {response.text}")
+
     except Exception as e:
-        print(f"❌ Exception during Supabase insert: {e}")
+        print(f"❌ Exception inserting to Supabase: {e}")
