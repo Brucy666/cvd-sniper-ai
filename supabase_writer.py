@@ -5,8 +5,8 @@ import datetime
 import os
 
 SUPABASE_URL = "https://jlnlwohutrnijiuxchna.supabase.co"
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Add this to Railway env vars
-SUPABASE_TABLE = "traps"
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "sb_secret_eFtCTuYaVmjhOC1lrkTRvg_yNiu7bR-"
+SUPABASE_TABLE = "Traps"
 
 headers = {
     "apikey": SUPABASE_KEY,
